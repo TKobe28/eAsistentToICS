@@ -5,11 +5,6 @@ from copy import copy
 from exceptions import *
 from config import get_config
 
-proxies = {
-    "http": "http://127.0.0.1:8080",
-    "https": "http://127.0.0.1:8080",
-}
-
 
 class AuthSession(requests.Session):
     def __init__(self, username: str, password: str, login: bool = True):
@@ -17,8 +12,7 @@ class AuthSession(requests.Session):
         self.username = username
         self.password = password
 
-        self.proxies = proxies
-        self.verify = False  # because we have the proxy
+        # todo: add proxies 
 
         if login:
             self.login()
@@ -56,7 +50,7 @@ class AuthSession(requests.Session):
         raise LoginError("Authentication completed but no session cookie was issued.")
 
     def login_required(func: FunctionType, tries=2):  # noqa
-        def inner(self: AuthSession, *args, **kwargs):
+        def inner(self: "AuthSession", *args, **kwargs):
             if self.cookies.get("ses") is None:
                 self.login()
             maybe_exception = Exception()

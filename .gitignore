@@ -1,0 +1,5 @@
+config.json
+calendar.ics
+cache/
+__pycache__/
+.venv/

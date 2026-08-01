@@ -68,7 +68,7 @@ if __name__ == "__main__":
                 print("nedefiniran ukaz")
             print("---\nTrenutni config:", get_config())
         except KeyboardInterrupt:
-            print("quitting...")
+            print("\nizhod ...", end="\r")
             break
 
     with open(CONFIG_PATH, "w") as f:
