@@ -1,75 +1,50 @@
-from pathlib import Path
-from pydantic import BaseModel
-import json
-from exceptions import ConfigError, InvalidConfig, NoConfigExisting
+import secrets
+from models import Config, User
+from exceptions import NoConfigExisting
 from getpass import getpass
-
-CONFIG_PATH = Path("./config.json")
-
-
-class User(BaseModel):
-    username: str
-    password: str
-
-    def __repr__(self):
-        return f'Uporabnik({self.username}, ****))'
-
-
-class Config(BaseModel):
-    users: list[User]
-
-
-_config: Config | None = None
-
-
-def get_config() -> Config:
-    global _config
-    if _config is None:
-        if CONFIG_PATH.exists():
-            try:
-                with open(CONFIG_PATH) as f:
-                    _config = Config.model_validate_json(f.read())
-            except Exception as e:
-                raise InvalidConfig(str(e))
-        else:
-            raise NoConfigExisting()
-
-    return _config
-
 
 if __name__ == "__main__":
     try:
-        print("Trenutni config:", get_config())
+        config = Config.load()
     except NoConfigExisting:
-        _config = Config(users=[])
+        config = Config(users=[])
 
     while True:
         try:
             action = input("""[ctrl + ^C] za izhod.
 [1] za dodajanje uporabnika
 [2] za odstranitev uporabnika
+[3] za regeneriranje URL za uporabnika
 > """)
             if action == "1":
                 username = input("username: ")
                 password = getpass("geslo: ")
-                _config.users.append(
-                    User(username=username, password=password)
-                )
+                user = User(username=username, password=password, calendar_token=secrets.token_urlsafe(config.token_lenght))
+                config.users.append(user)
+                print(f"URL za tega uporabnika je: /calendar/{user.calendar_token}")  # todo: add url prefix or sum shit into config?
             elif action == "2":
                 username = input("username: ")
                 done = False
-                for i, user in enumerate(_config.users):
+                for i, user in enumerate(config.users):
                     if user.username == username:
-                        _config.users.pop(i)
+                        config.users.pop(i)
                         done = True
                         break
                 print("Opravljeno." if done else "uporabnik ne obstaja")
+            elif action == "3":
+                username = input("username: ")
+                done = False
+                for i, user in enumerate(config.users):
+                    if user.username == username:
+                        user.calendar_token = secrets.token_urlsafe(config.token_lenght)
+                        done = True
+                        break
+                print(f"Opravljeno. Novi URL je zdaj /calendar/{user.calendar_token}" if done else "uporabnik ne obstaja")
             else:
                 print("nedefiniran ukaz")
-            print("---\nTrenutni config:", get_config())
+            print("---\nTrenutni config:", config)
+            config.save()
         except KeyboardInterrupt:
             print("\nizhod ...", end="\r")
             break
-
-    with open(CONFIG_PATH, "w") as f:
-        f.write(_config.model_dump_json(indent=2))
+    config.save()

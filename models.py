@@ -1,9 +1,13 @@
 from pydantic import BaseModel, Field, AliasChoices, AliasPath, model_validator, computed_field, Discriminator
-from typing import Optional, Annotated, Literal
+from typing import Optional, Annotated, Literal, ClassVar
+from login import AuthSession
+from exceptions import ConfigError, InvalidConfig, NoConfigExisting
 # todo: from functools import cached_property
-from datetime import date, time, datetime, timezone
+from datetime import date, time, datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
+from pathlib import Path
 import ics
+from exports import weeks_to_ics
 
 TIMEZONE = ZoneInfo("Europe/Ljubljana")
 
@@ -249,3 +253,90 @@ AnyEvent = Annotated[
 class Week(BaseModel):
     schedule: Schedule
     events: list[AnyEvent]
+    unpublished_schedule_message: str | None = None
+
+    @classmethod
+    def model_validate(cls, week: dict, *, strict = None, extra = None, from_attributes = None, context = None, by_alias = None, by_name = None):
+        for i, event in enumerate(week["events"]):
+            if slug := event.get("slug"):
+                t, i_ = slug.split("$", 1)
+                week["events"][i]["slug_type"] = t
+                week["events"][i]["event_id"] = int(i_)
+        return super().model_validate(week, strict=strict, extra=extra, from_attributes=from_attributes, context=context, by_alias=by_alias, by_name=by_name)
+
+
+class User(BaseModel):
+    username: str
+    password: str
+
+    min_update_time: timedelta = timedelta(seconds=15)
+
+    calendar_token: str
+
+    _auth: AuthSession | None = None
+    last_update: time = datetime(1, 1, 1)
+    weeks: set[Week] = set()
+    _calendar: ics.Calendar | None = None
+    _calendar_str: str | None = None
+
+    async def update_calendar(self, max_weeks_in_future: int = 10) -> ics.Calendar:
+        now = datetime.now()
+        if now - self._last_update < self.min_update_time:
+            if self._calendar is None:
+                self._calendar = weeks_to_ics(self.weeks)
+            return self._calendar
+
+        if start_date is None:
+            start_date = date.today()
+        
+        current = start_date - timedelta(days=start_date.weekday())  # Monday
+        weeks: list[Week] = []
+        unpublished = False
+        while len(weeks) < max_weeks_in_future and not unpublished:
+            weeks.append(await self.auth_session.get_week(str(current)))
+            current += timedelta(weeks=1)
+            unpublished = weeks[-1].unpublished_schedule_message is None
+
+        self._calendar = weeks_to_ics(weeks)
+        self._last_update = now
+        self._calendar_str = None
+        return self._calendar        
+
+    async def get_calendar(self) -> str:
+        if self._calendar is None:
+            await self.update_calendar()
+        if self._calendar_str is None:
+            self._calendar_str = self._calendar.serialize()
+        return self._calendar_str
+    
+    @property
+    def auth_session(self) -> AuthSession:
+        if not self._auth:
+            self._auth = AuthSession(self.username, self.password)
+        return self._auth
+        
+
+    def __repr__(self):
+        return f'Uporabnik({self.username}, ****, {self.calendar_token})'
+
+
+class Config(BaseModel):
+    users: list[User]
+    cache_path: str = "./cache/"
+
+    token_lenght: int = 32
+
+    @classmethod
+    def load(cls, config_path: Path = Path("./config.json")):
+        if config_path.exists():
+            try:
+                with open(config_path) as f:
+                    return cls.model_validate_json(f.read())
+            except Exception as e:
+                raise InvalidConfig(str(e))
+        else:
+            raise NoConfigExisting()
+
+    def save(self, config_path: Path = Path("./config.json")):
+        with open(config_path, "w") as f:
+            f.write(self.model_dump_json(indent=2))

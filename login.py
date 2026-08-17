@@ -3,7 +3,10 @@ import parse_timetable
 from types import FunctionType
 from copy import copy
 from exceptions import *
-from config import get_config
+import models
+from pathlib import Path
+import os.path
+import json
 
 
 class AuthSession(requests.Session):
@@ -64,31 +67,49 @@ class AuthSession(requests.Session):
         return inner
 
     @login_required
-    def fetch_week(self, _date: str, verbose: bool = False) -> dict:
+    def fetch_week(self, _date: str) -> dict:  # todo: async
         """
         :param _date: must be in YYYY-MM-DD format!
-        :param verbose
         :return:
         """
         if not self.cookies.get("ses"):
             self.login()
 
         payload = f'["{_date}"]'
-
+        print("fetching week:", _date)
         response = self.post(
             "https://moj.easistent.com/timetable",
             data=payload,
             headers={
-                "next-action": "40c2ee8acc4d66a17c62baed77a8fac56e2b2e0074"
+                "next-action": "4098d9baa62b41a6dc41df63b9f51afa636d2000c4"
             }
         )
 
-        print(response.content.decode())
         print(response.status_code, response.reason)
         response.raise_for_status()
 
         return parse_timetable.parse_raw(response.content.decode())
 
+    @login_required
+    async def get_week(self, _date: str, cache_path: str = "./cache/") -> "Week":
+        """
+        :param _date: must be in YYYY-MM-DD format!
+        :return:
+        """
+        path = Path(cache_path + self.username + "/" + _date + ".json")
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    return parse_timetable.parse_week(json.load(f))
+            except Exception as e:
+                print(f"Error while opening cached week {path}, attempting refetching and rewriting. Error was:", e)
+
+        week = self.fetch_week(_date)
+
+        with open(path, "w") as f:
+            json.dump(week, f, indent=2)
+
+        return models.Week.model_validate(week)
 
 if __name__ == "__main__":
     config = get_config()
