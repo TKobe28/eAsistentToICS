@@ -63,6 +63,7 @@ class AuthSession(requests.Session):
                 except Exception as e:
                     maybe_exception = copy(e)
                     print(f"Failed running {func.__name__} for user {self.username}: {e}. {'Retrying login.' if i + 1 < tries else 'Not retrying anymore.'}")
+                    self.login()
             raise maybe_exception
         return inner
 
