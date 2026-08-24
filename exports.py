@@ -1,7 +1,7 @@
 from datetime import date
 from ics import Calendar
 from collections import defaultdict
-from models import  *
+from models import *
 from login import AuthSession
 
 

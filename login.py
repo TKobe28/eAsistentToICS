@@ -67,7 +67,7 @@ class AuthSession(requests.Session):
         return inner
 
     @login_required
-    def fetch_week(self, _date: str) -> dict:  # todo: async
+    async def fetch_week(self, _date: str) -> dict:  # todo: async
         """
         :param _date: must be in YYYY-MM-DD format!
         :return:
@@ -81,36 +81,25 @@ class AuthSession(requests.Session):
             "https://moj.easistent.com/timetable",
             data=payload,
             headers={
-                "next-action": "4098d9baa62b41a6dc41df63b9f51afa636d2000c4"
+                "next-action": "40f7e2ca0a55610a599e5b7f385c5a72a5cb0d4da6"  # todo!
             }
         )
 
         print(response.status_code, response.reason)
         response.raise_for_status()
 
-        return parse_timetable.parse_raw(response.content.decode())
+        return parse_timetable.parse_raw(response.content.decode(), _date)
 
     @login_required
-    async def get_week(self, _date: str, cache_path: str = "./cache/") -> "Week":
+    async def get_week(self, _date: str) -> "Week":
         """
         :param _date: must be in YYYY-MM-DD format!
         :return:
         """
-        path = Path(cache_path + self.username + "/" + _date + ".json")
-        if os.path.exists(path):
-            try:
-                with open(path, "r") as f:
-                    return parse_timetable.parse_week(json.load(f))
-            except Exception as e:
-                print(f"Error while opening cached week {path}, attempting refetching and rewriting. Error was:", e)
-
-        week = self.fetch_week(_date)
-
-        with open(path, "w") as f:
-            json.dump(week, f, indent=2)
-
+        week = await self.fetch_week(_date)
         return models.Week.model_validate(week)
 
+
 if __name__ == "__main__":
-    config = get_config()
+    config = models.Config.load()
     print(AuthSession(config.users[0].username, config.users[0].password, login=True))

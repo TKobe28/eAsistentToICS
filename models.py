@@ -1,14 +1,15 @@
 from pydantic import BaseModel, Field, AliasChoices, AliasPath, model_validator, computed_field, Discriminator
+import json
 from typing import Optional, Annotated, Literal, ClassVar
 from login import AuthSession
 from exceptions import ConfigError, InvalidConfig, NoConfigExisting
-# todo: from functools import cached_property
+from functools import cached_property
 from datetime import date, time, datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from pathlib import Path
 import ics
 from exports import weeks_to_ics
-
+from traceback import format_exception
 TIMEZONE = ZoneInfo("Europe/Ljubljana")
 
 """
@@ -251,6 +252,7 @@ AnyEvent = Annotated[
 
 
 class Week(BaseModel):
+    date: date
     schedule: Schedule
     events: list[AnyEvent]
     unpublished_schedule_message: str | None = None
@@ -265,46 +267,69 @@ class Week(BaseModel):
         return super().model_validate(week, strict=strict, extra=extra, from_attributes=from_attributes, context=context, by_alias=by_alias, by_name=by_name)
 
 
-class User(BaseModel):
+class UserConfig(BaseModel):
     username: str
     password: str
-
     min_update_time: timedelta = timedelta(seconds=15)
-
     calendar_token: str
+    last_update: datetime = datetime.fromtimestamp(0)
 
+    def __repr__(self):
+        return f'Uporabnik({self.username}, ****, {self.calendar_token})'
+
+
+class User(UserConfig):
     _auth: AuthSession | None = None
-    last_update: time = datetime(1, 1, 1)
-    weeks: set[Week] = set()
+
+    weeks: list[Week] = list()
     _calendar: ics.Calendar | None = None
     _calendar_str: str | None = None
 
-    async def update_calendar(self, max_weeks_in_future: int = 10) -> ics.Calendar:
+    async def update_calendar(self, start_date: date | None = None, max_date: date = None, cache_path: str = "./cache/", hard: bool = False) -> ics.Calendar:
+        """
+        :param start_date: The start of the period. If left None, the period will start with last 1st september.
+        :param max_date: not implemented - todo
+        :param hard: if we discard cache. If False only weeks in the present or future will be updated.
+        :return:
+        """
         now = datetime.now()
-        if now - self._last_update < self.min_update_time:
+        if now - self.last_update < self.min_update_time:
             if self._calendar is None:
                 self._calendar = weeks_to_ics(self.weeks)
             return self._calendar
 
         if start_date is None:
-            start_date = date.today()
-        
-        current = start_date - timedelta(days=start_date.weekday())  # Monday
-        weeks: list[Week] = []
-        unpublished = False
-        while len(weeks) < max_weeks_in_future and not unpublished:
-            weeks.append(await self.auth_session.get_week(str(current)))
-            current += timedelta(weeks=1)
-            unpublished = weeks[-1].unpublished_schedule_message is None
+            first_september = date(now.year if now.month > 8 else now.year-1, 9, 1)
+            start_date = first_september if hard else max(first_september, self.last_update.date())
 
-        self._calendar = weeks_to_ics(weeks)
-        self._last_update = now
+        print(f"updating calendar, start_date is {start_date}.")
+        for i, week in enumerate(self.weeks):
+            if week.date >= start_date:
+                self.weeks = self.weeks[:i]
+                break
+
+        current = start_date - timedelta(days=start_date.weekday())  # Monday
+
+        new_weeks = []
+        unpublished = False
+        while not unpublished:
+            new_weeks.append(await self.auth_session.get_week(str(current)))
+            current += timedelta(weeks=1)
+            unpublished = new_weeks[-1].unpublished_schedule_message is not None
+
+        if hard:
+            self.weeks = new_weeks
+        else:
+            self.weeks += new_weeks
+
+        self._calendar = weeks_to_ics(self.weeks)
+        self.last_update = now
         self._calendar_str = None
         return self._calendar        
 
-    async def get_calendar(self) -> str:
+    async def get_calendar(self, start_date: datetime | None = None,  max_weeks_in_future: int = 10, cache_path: str = "./cache/") -> str:
         if self._calendar is None:
-            await self.update_calendar()
+            await self.update_calendar(start_date, max_weeks_in_future, cache_path)
         if self._calendar_str is None:
             self._calendar_str = self._calendar.serialize()
         return self._calendar_str
@@ -314,17 +339,27 @@ class User(BaseModel):
         if not self._auth:
             self._auth = AuthSession(self.username, self.password)
         return self._auth
-        
-
-    def __repr__(self):
-        return f'Uporabnik({self.username}, ****, {self.calendar_token})'
 
 
 class Config(BaseModel):
-    users: list[User]
+    user_configs: list[UserConfig]
     cache_path: str = "./cache/"
 
-    token_lenght: int = 32
+    token_length: int = 32
+
+    @cached_property
+    def users(self) -> list[User]:
+        result = []
+        for uc in self.user_configs:
+            weeks = self._load_weeks(uc.username)
+            result.append(User(**uc.model_dump(), weeks=weeks))
+        return result
+
+    def _load_weeks(self, username: str) -> list[Week]:
+        path = Path(self.cache_path + f"{username}.json")
+        if not path.exists():
+            return []
+        return [Week.model_validate(w) for w in json.loads(path.read_text())]
 
     @classmethod
     def load(cls, config_path: Path = Path("./config.json")):
@@ -337,6 +372,19 @@ class Config(BaseModel):
         else:
             raise NoConfigExisting()
 
+    def save_user_cache(self, user: User):
+        path = Path(self.cache_path + f"{user.username}.json")
+        path.write_text(json.dumps([w.model_dump(mode="json") for w in user.weeks]))
+
+    def save_users_cache(self):
+        for user in self.users:
+            try:
+                self.save_user_cache(user)
+            except Exception as e:
+                print(f"OOPSIE!! {e} when saving {user.username}s cache! Error: ", '\n'.join(format_exception(e)))
+
     def save(self, config_path: Path = Path("./config.json")):
+        self.save_users_cache()
         with open(config_path, "w") as f:
             f.write(self.model_dump_json(indent=2))
+

@@ -28,7 +28,7 @@ async def calendar(token: str):
         raise HTTPException(404)
 
     return Response(
-        content=calendar.serialize(),
+        content=calendar,
         media_type="text/calendar",
         headers={
             "Content-Disposition": 'inline; filename="calendar.ics"',
