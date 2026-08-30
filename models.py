@@ -282,6 +282,8 @@ class User(UserConfig):
     _auth: AuthSession | None = None
 
     weeks: list[Week] = list()
+    config: "Config"
+
     _calendar: ics.Calendar | None = None
     _calendar_str: str | None = None
 
@@ -332,7 +334,7 @@ class User(UserConfig):
         self._calendar_str = None
         return self._calendar        
 
-    async def get_calendar(self, start_date: datetime | None = None,  max_weeks_in_future: int = 10) -> str:
+    async def get_calendar(self, start_date: datetime | None = None, max_weeks_in_future: int = 10) -> str:
         if self._calendar is None:
             await self.update_calendar(start_date, max_weeks_in_future)
         if self._calendar_str is None:
@@ -342,13 +344,15 @@ class User(UserConfig):
     @property
     def auth_session(self) -> AuthSession:
         if not self._auth:
-            self._auth = AuthSession(self.username, self.password)
+            self._auth = AuthSession(self.username, self.password, self.config)
         return self._auth
 
 
 class Config(BaseModel):
     user_configs: list[UserConfig]
     cache_path: str = "./cache/"
+
+    next_action_token: str | None = None
 
     token_length: int = 32
 
@@ -357,7 +361,7 @@ class Config(BaseModel):
         result = []
         for uc in self.user_configs:
             weeks = self._load_weeks(uc.username)
-            result.append(User(**uc.model_dump(), weeks=weeks))
+            result.append(User(**uc.model_dump(), weeks=weeks, config=self))
         return result
 
     def _load_weeks(self, username: str) -> list[Week]:

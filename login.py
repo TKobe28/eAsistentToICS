@@ -4,16 +4,18 @@ from types import FunctionType
 from copy import copy
 from exceptions import *
 import models
+from discover_next_action_token import discover_action_id
 from pathlib import Path
 import os.path
 import json
 
 
 class AuthSession(requests.Session):
-    def __init__(self, username: str, password: str, login: bool = True):
+    def __init__(self, username: str, password: str, config: "models.Config", login: bool = True):
         super().__init__()
         self.username = username
         self.password = password
+        self.config = config
 
         # todo: add proxies 
 
@@ -67,6 +69,18 @@ class AuthSession(requests.Session):
             raise maybe_exception
         return inner
 
+    async def reset_next_action_token(self):
+        print("Resetting the next-action token!")
+        next_action_token = discover_action_id(self)
+        self.config.next_action_token = next_action_token
+        return next_action_token
+
+    async def get_next_action_token(self):
+        next_action_token = self.config.next_action_token
+        if next_action_token is None:
+            return await self.reset_next_action_token()
+        return next_action_token
+
     @login_required
     async def fetch_week(self, _date: str) -> dict:  # todo: async
         """
@@ -76,15 +90,22 @@ class AuthSession(requests.Session):
         if not self.cookies.get("ses"):
             self.login()
 
-        payload = f'["{_date}"]'
-        print("fetching week:", _date)
-        response = self.post(
-            "https://moj.easistent.com/timetable",
-            data=payload,
-            headers={
-                "next-action": "40f7e2ca0a55610a599e5b7f385c5a72a5cb0d4da6"  # todo!
-            }
-        )
+        next_action_token = await self.get_next_action_token()
+
+        for i in range(2):
+            payload = f'["{_date}"]'
+            print("fetching week:", _date)
+            response = self.post(
+                "https://moj.easistent.com/timetable",
+                data=payload,
+                headers={
+                    "next-action": next_action_token
+                }
+            )
+            if response.status_code == 404:
+                if i == 1:
+                    raise AuthenticationFlowError("failed at fetching timetable. Resetting the next-action token didn't work.")
+                next_action_token = await self.reset_next_action_token()
 
         print(response.status_code, response.reason)
         response.raise_for_status()
@@ -92,7 +113,7 @@ class AuthSession(requests.Session):
         return parse_timetable.parse_raw(response.content.decode(), _date)
 
     @login_required
-    async def get_week(self, _date: str) -> "Week":
+    async def get_week(self, _date: str) -> "models.Week":
         """
         :param _date: must be in YYYY-MM-DD format!
         :return:
@@ -103,4 +124,4 @@ class AuthSession(requests.Session):
 
 if __name__ == "__main__":
     config = models.Config.load()
-    print(AuthSession(config.users[0].username, config.users[0].password, login=True))
+    print(AuthSession(config.users[0].username, config.users[0].password, config, login=True))

@@ -44,7 +44,7 @@ if __name__ == "__main__":
                 print("nedefiniran ukaz")
             print("---\nTrenutni config:", config)
             config.save()
-        except KeyboardInterrupt | EOFError:
+        except KeyboardInterrupt:
             print("\nizhod ...", end="\r")
             break
     config.save()
