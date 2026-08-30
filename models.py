@@ -285,11 +285,11 @@ class User(UserConfig):
     _calendar: ics.Calendar | None = None
     _calendar_str: str | None = None
 
-    async def update_calendar(self, start_date: date | None = None, max_date: date = None, cache_path: str = "./cache/", hard: bool = False) -> ics.Calendar:
+    async def update_calendar(self, start_date: date | None = None, max_weeks_in_future: int = -1, hard: bool = False) -> ics.Calendar:
         """
         :param start_date: The start of the period. If left None, the period will start with last 1st september.
-        :param max_date: not implemented - todo
-        :param hard: if we discard cache. If False only weeks in the present or future will be updated.
+        :param max_weeks_in_future: up to how many weeks in the future from today we can update. If left as -1, there will be no limit.
+        :param hard: if we discard existing data. If False only weeks in the present or future will be updated.
         :return:
         """
         now = datetime.now()
@@ -312,8 +312,13 @@ class User(UserConfig):
 
         new_weeks = []
         unpublished = False
+        weeks_in_future = 0
         while not unpublished:
             new_weeks.append(await self.auth_session.get_week(str(current)))
+            if current > now.date():
+                weeks_in_future += 1
+                if weeks_in_future == max_weeks_in_future:
+                    break
             current += timedelta(weeks=1)
             unpublished = new_weeks[-1].unpublished_schedule_message is not None
 
@@ -327,9 +332,9 @@ class User(UserConfig):
         self._calendar_str = None
         return self._calendar        
 
-    async def get_calendar(self, start_date: datetime | None = None,  max_weeks_in_future: int = 10, cache_path: str = "./cache/") -> str:
+    async def get_calendar(self, start_date: datetime | None = None,  max_weeks_in_future: int = 10) -> str:
         if self._calendar is None:
-            await self.update_calendar(start_date, max_weeks_in_future, cache_path)
+            await self.update_calendar(start_date, max_weeks_in_future)
         if self._calendar_str is None:
             self._calendar_str = self._calendar.serialize()
         return self._calendar_str
