@@ -5,7 +5,7 @@ Pls don't judge me, I hate regex, UwU
 import re
 from typing import Optional
 from urllib.parse import urljoin
-import requests
+import httpx
 
 
 def _extract_chunk_urls(html: str, base_url: str) -> list[str]:
@@ -33,13 +33,13 @@ def _find_action_id(js_text: str, action_name: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
-def discover_action_id(session: requests.Session, page_url: str = "https://moj.easistent.com/timetable", action_name: str = "getWeekTimetable") -> str:
+async def discover_action_id(session: httpx.AsyncClient, page_url: str = "https://moj.easistent.com/timetable", action_name: str = "getWeekTimetable") -> str:
     """Fetch the page, walk its JS chunks, return the action's current id."""
-    page = session.get(page_url)
+    page = await session.get(page_url)
     page.raise_for_status()
 
     for chunk_url in _extract_chunk_urls(page.text, page_url):
-        js = session.get(chunk_url)
+        js = await session.get(chunk_url)
         if js.status_code != 200:
             continue
         action_id = _find_action_id(js.text, action_name)

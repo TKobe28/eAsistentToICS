@@ -22,11 +22,12 @@ def weeks_to_ics(weeks: list["Week"]) -> Calendar:
 
 if __name__ == "__main__":
     from getter import get_weeks
-    from config import get_config
-    config = get_config()
-    auth_session = AuthSession(config.users[0].username, config.users[0].password, login=False)
-    weeks = get_weeks(auth_session=auth_session, start=date(2025, 9, 1), end=date(2026, 6, 20), rewrite=False)
+    from config import Config
+    import asyncio
+    config = Config.load()
+    auth_session = AuthSession(config.users[0].username, config.users[0].password, config)
+    weeks = asyncio.run(get_weeks(auth_session=auth_session, start=date(2025, 9, 1), end=date(2026, 6, 20), rewrite=False))
     calendar = weeks_to_ics(weeks)
     output = "calendar.ics"
     with open(output, "w") as f:
-        f.writelines(calendar)
+        f.writelines(calendar.serialize())
