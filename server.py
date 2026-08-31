@@ -39,3 +39,16 @@ async def calendar(token: str):
             "Content-Disposition": 'inline; filename="calendar.ics"',
         },
     )
+
+
+if __name__ == "__main__":
+    import uvicorn
+    import json
+    SERVER_CONFIG_PATH = "server_config.json"
+    with open(SERVER_CONFIG_PATH, "r") as f:
+        server_config = json.load(f)
+
+    uvicorn.run(
+        "server:app",
+        **server_config
+    )
