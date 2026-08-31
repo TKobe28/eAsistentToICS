@@ -1,5 +1,5 @@
 import secrets
-from models import Config, User
+from models import Config, UserConfig
 from exceptions import NoConfigExisting
 from getpass import getpass
 
@@ -19,8 +19,8 @@ if __name__ == "__main__":
             if action == "1":
                 username = input("username: ")
                 password = getpass("geslo: ")
-                user = User(username=username, password=password, calendar_token=secrets.token_urlsafe(config.token_length))
-                config.users.append(user)
+                user = UserConfig(username=username, password=password, calendar_token=secrets.token_urlsafe(config.token_length))
+                config.user_configs.append(user)
                 print(f"URL za tega uporabnika je: /calendar/{user.calendar_token}")  # todo: add url prefix or sum shit into config?
             elif action == "2":
                 username = input("username: ")
@@ -34,7 +34,7 @@ if __name__ == "__main__":
             elif action == "3":
                 username = input("username: ")
                 done = False
-                for i, user in enumerate(config.users):
+                for i, user in enumerate(config.user_configs):
                     if user.username == username:
                         user.calendar_token = secrets.token_urlsafe(config.token_length)
                         done = True
