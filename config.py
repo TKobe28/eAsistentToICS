@@ -7,7 +7,7 @@ if __name__ == "__main__":
     try:
         config = Config.load()
     except NoConfigExisting:
-        config = Config(users=[])
+        config = Config(user_configs=[])
 
     while True:
         try:
