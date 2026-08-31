@@ -10,6 +10,10 @@ from pathlib import Path
 import ics
 from exports import weeks_to_ics
 from traceback import format_exception
+import logging
+
+logger = logging.getLogger(__name__)
+
 TIMEZONE = ZoneInfo("Europe/Ljubljana")
 
 """
@@ -304,7 +308,7 @@ class User(UserConfig):
             first_september = date(now.year if now.month > 8 else now.year-1, 9, 1)
             start_date = first_september if hard else max(first_september, self.last_update.date())
 
-        print(f"updating calendar, start_date is {start_date}.")
+        logger.info(f"updating calendar, start_date is {start_date}.")
         for i, week in enumerate(self.weeks):
             if week.date >= start_date:
                 self.weeks = self.weeks[:i]

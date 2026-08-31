@@ -3,16 +3,21 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from timetable_service import TimetableService
+from logging_config import setup_logging
+import logging
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("init")
     config = Config.load()
     app.state.timetable = TimetableService(config)
+    logger.debug("Done with initialisation")
     yield
     config.save()
-    print("config saving successful")
+    logger.info("config saved")
 
 
 app = FastAPI(lifespan=lifespan)

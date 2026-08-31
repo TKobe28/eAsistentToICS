@@ -5,6 +5,9 @@ from copy import copy
 from exceptions import *
 import models
 from discover_next_action_token import discover_action_id
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class AuthSession:
@@ -45,7 +48,7 @@ class AuthSession:
         while r.is_redirect:
             r = await self.client.get(r.headers["Location"], follow_redirects=False)
             if "ses" in self.client.cookies:
-                print(f"Logged in user {self.username}.")
+                logger.info(f"Logged in user {self.username}.")
                 return
         raise LoginError("Authentication completed but no session cookie was issued.")
 
@@ -59,15 +62,15 @@ class AuthSession:
                     return await func(self, *args, **kwargs)
                 except Exception as e:
                     maybe_exception = copy(e)
-                    print(f"Failed running {func.__name__} for user {self.username}: {e}. "
-                          f"{'Retrying login.' if i + 1 < tries else 'Not retrying anymore.'}")
+                    logger.warning(f"Failed running {func.__name__} for user {self.username}: {e}. "
+                                   f"{'Retrying login.' if i + 1 < tries else 'Not retrying anymore.'}")
                     await self.login()
             raise maybe_exception
 
         return inner
 
     async def reset_next_action_token(self):
-        print("Resetting the next-action token!")
+        logger.info("Resetting the next-action token!")
         next_action_token = await discover_action_id(self.client)
         self.config.next_action_token = next_action_token
         return next_action_token
@@ -87,7 +90,7 @@ class AuthSession:
 
         for i in range(2):
             payload = f'["{_date}"]'
-            print("fetching week:", _date)
+            logger.info("fetching week " + _date)
             response = await self.client.post(
                 "https://moj.easistent.com/timetable",
                 data=payload,
@@ -98,8 +101,10 @@ class AuthSession:
                     raise AuthenticationFlowError(
                         "failed at fetching timetable. Resetting the next-action token didn't work.")
                 next_action_token = await self.reset_next_action_token()
+            else:
+                break
 
-        print(response.status_code, response.reason_phrase)
+        logger.debug(f"fetch resulted in: {response.status_code}, {response.reason_phrase}")
         response.raise_for_status()
 
         return parse_timetable.parse_raw(response.content.decode(), _date)
