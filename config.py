@@ -36,7 +36,7 @@ if __name__ == "__main__":
                 done = False
                 for i, user in enumerate(config.users):
                     if user.username == username:
-                        user.calendar_token = secrets.token_urlsafe(config.token_lenght)
+                        user.calendar_token = secrets.token_urlsafe(config.token_length)
                         done = True
                         break
                 print(f"Opravljeno. Novi URL je zdaj /calendar/{user.calendar_token}" if done else "uporabnik ne obstaja")
