@@ -19,7 +19,7 @@ if __name__ == "__main__":
             if action == "1":
                 username = input("username: ")
                 password = getpass("geslo: ")
-                user = User(username=username, password=password, calendar_token=secrets.token_urlsafe(config.token_lenght))
+                user = User(username=username, password=password, calendar_token=secrets.token_urlsafe(config.token_length))
                 config.users.append(user)
                 print(f"URL za tega uporabnika je: /calendar/{user.calendar_token}")  # todo: add url prefix or sum shit into config?
             elif action == "2":
