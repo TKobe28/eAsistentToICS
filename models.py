@@ -390,6 +390,7 @@ class Config(BaseModel):
         path.write_text(json.dumps([w.model_dump(mode="json") for w in user.weeks]))
 
     def save_users_cache(self):
+        Path(self.cache_path).mkdir(parents=True, exist_ok=True)
         for user in self.users:
             try:
                 self.save_user_cache(user)
