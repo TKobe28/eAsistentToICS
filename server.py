@@ -44,9 +44,25 @@ async def calendar(token: str):
 if __name__ == "__main__":
     import uvicorn
     import json
-    SERVER_CONFIG_PATH = "server_config.json"
-    with open(SERVER_CONFIG_PATH, "r") as f:
-        server_config = json.load(f)
+    from pathlib import Path
+    DEFAULT_SERVER_CONFIG_PATH = Path("default_server_config.json")
+    SERVER_CONFIG_PATH = Path("server_config.json")
+
+    if not SERVER_CONFIG_PATH.exists():
+        logger.info(f"{SERVER_CONFIG_PATH} not found.")
+        if not DEFAULT_SERVER_CONFIG_PATH.exists():
+            logger.critical(f"{DEFAULT_SERVER_CONFIG_PATH} also not found! Cannot continue.")
+            exit()
+        logger.info(f"Copying {DEFAULT_SERVER_CONFIG_PATH} to {SERVER_CONFIG_PATH}")
+        SERVER_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)  # might not be needed
+
+        cnfg_text = DEFAULT_SERVER_CONFIG_PATH.read_text()
+        SERVER_CONFIG_PATH.write_text(cnfg_text)
+
+        server_config = json.loads(cnfg_text)
+    else:
+        with open(SERVER_CONFIG_PATH, "r") as f:
+            server_config = json.load(f)
 
     uvicorn.run(
         "server:app",
