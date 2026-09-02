@@ -8,7 +8,6 @@ from datetime import date, time, datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from pathlib import Path
 import ics
-from exports import weeks_to_ics
 from traceback import format_exception
 import logging
 
@@ -269,6 +268,19 @@ class Week(BaseModel):
                 week["events"][i]["slug_type"] = t
                 week["events"][i]["event_id"] = int(i_)
         return super().model_validate(week, strict=strict, extra=extra, from_attributes=from_attributes, context=context, by_alias=by_alias, by_name=by_name)
+
+
+def weeks_to_ics(weeks: list["Week"]) -> ics.Calendar:
+    calendar = ics.Calendar()
+    #  num_of_instances = defaultdict(int)
+    for week in weeks:
+        for event in week.events:
+            #  num_of_instances[event.__class__.__name__] += 1
+            calendar.events.add(
+                event.to_ics(week.schedule)
+            )
+    #  print(dict(num_of_instances))
+    return calendar
 
 
 class UserConfig(BaseModel):
