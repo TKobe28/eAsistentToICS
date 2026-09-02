@@ -220,7 +220,7 @@ class SpecialSchoolHour(SchoolHour):
         return f"[{self.type_label_short}] {super().name}"
 
     def get_description(self, schedule: Optional[Schedule] = None) -> str:
-        return self.type_label + "\n" + super().get_description(schedule)
+        return self.type_label + f" - namesto {self.original_subject}\n" if self.original_subject else "\n" + super().get_description(schedule)
 
 
 # this would be hard to implement because type_label is made later and there is no good reason
