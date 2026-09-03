@@ -164,6 +164,12 @@ class SchoolEvent(Event):
             other_ics_arguments["location"] = self.classroom
         return other_ics_arguments
 
+    def get_description(self, schedule: Optional[Schedule] = None) -> str:
+        description = super().get_description(schedule)
+        if len(self.teachers) > 0:
+            description += "\n" + ", ".join(self.teachers)
+        return description
+
 
 class Subject(BaseModel):
     subject_id: int
@@ -199,8 +205,15 @@ class SchoolHour(Event):
 
     def get_other_ics_arguments(self) -> dict:
         return {
+            "organizer": ", ".join(self.teachers),
             "location": self.classroom
         }
+
+    def get_description(self, schedule: Optional[Schedule] = None) -> str:
+        description = super().get_description(schedule)
+        if len(self.teachers) > 0:
+            description += "\n" + ", ".join(self.teachers)
+        return description
 
 
 class SpecialSchoolHour(SchoolHour):
