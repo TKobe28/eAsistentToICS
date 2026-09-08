@@ -9,18 +9,21 @@ config = models.Config.load()
 users = config.users
 user = None
 if len(users) != 0:
-    print("Shranjeni uporabniki:", ", ".join([user.username for user in users]))
+    print("Shranjeni uporabniki:")
+    users_dict = {}
+    for i, user in enumerate(users):
+        i = str(i)
+        print(i + ": " + user.username)
+        users_dict[i] = user
+
     while True:
-        e = input('Izberi uporabnika ali napiši "NE" da izbereš drugega uporabnika brez shranjevanja > ')
-        if e == "NE":
+        e = input('Napiši številko željenega uporabnika ali pa pusti prazno. da izbereš drugega uporabnika brez shranjevanja > ')
+        if e == "":
+            print("Nadaljevanje brez shranjenih podatkov.")
             break
-        for usr in users:
-            if usr.username == e:
-                user = usr
-                break
-            print("Ta uporabnik ni med shranjenimi.")
-        if user is not None:
+        if user := users_dict.get(e):
             break
+        print("Ta uporabnik ni med shranjenimi.")
 else:
     print(
         "Ni nobenega shranjenega uporabnika. Zaženi config.py za dodajanje uporabnikov. Zdaj pa lahko vneseš podatke za drugega uporabnika brez shranjevanja.")
@@ -49,5 +52,5 @@ while True:
     else:
         filename.parent.mkdir(exist_ok=True, parents=True)
         break
-print("Saving to", filename)
+print("Shranjevanje v:", filename)
 filename.write_text(calendar.serialize())
