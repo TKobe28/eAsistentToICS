@@ -3,3 +3,4 @@ calendar.ics
 cache/
 __pycache__/
 .venv/
+secret.key

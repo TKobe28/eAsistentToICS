@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, AliasChoices, AliasPath, model_validator, computed_field, Discriminator
+from pydantic import BaseModel, Field, AliasChoices, AliasPath, model_validator, computed_field, field_validator, field_serializer
 import json
 from typing import Optional, Annotated, Literal, ClassVar
 from login import AuthSession
@@ -10,10 +10,28 @@ from pathlib import Path
 import ics
 from traceback import format_exception
 import logging
+from cryptography.fernet import Fernet, InvalidToken
+import stat
 
 logger = logging.getLogger(__name__)
 
 TIMEZONE = ZoneInfo("Europe/Ljubljana")
+
+KEY_PATH = Path("./secret.key")  # change this to be outside of project folder if you care enough
+
+
+def get_or_create_key() -> bytes:
+    if KEY_PATH.exists():
+        logger.debug("encryption key found")
+        return KEY_PATH.read_bytes()
+    logger.warning("Encryption key not found. Generating a new one.")
+    key = Fernet.generate_key()
+    KEY_PATH.write_bytes(key)
+    KEY_PATH.chmod(stat.S_IRUSR | stat.S_IWUSR)  # chmod 600, owner read/write only
+    return key
+
+
+fernet = Fernet(get_or_create_key())
 
 """
 navadni tipi:
@@ -302,6 +320,19 @@ class UserConfig(BaseModel):
     min_update_time: timedelta = timedelta(seconds=15)
     calendar_token: str
     last_update: datetime = datetime.fromtimestamp(0)
+
+    @field_validator("password", mode="before")
+    @classmethod
+    def decrypt(cls, v: str) -> str:
+        try:
+            return fernet.decrypt(v.encode()).decode()
+        except InvalidToken as e:
+            logger.warning("A password failed to decrypt. This probably means they weren't encrypted in the config file, so we are ignoring this.")
+            return v
+
+    @field_serializer("password")
+    def encrypt(self, v: str) -> str:
+        return fernet.encrypt(v.encode()).decode()
 
     def __repr__(self):
         return f'Uporabnik({self.username}, ****, {self.calendar_token})'
