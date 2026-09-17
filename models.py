@@ -364,8 +364,7 @@ class User(UserConfig):
         return self._calendar        
 
     async def get_calendar(self, start_date: datetime | None = None, max_weeks_in_future: int = 10) -> str:
-        if self._calendar is None:
-            await self.update_calendar(start_date, max_weeks_in_future)
+        await self.update_calendar(start_date, max_weeks_in_future)
         if self._calendar_str is None:
             self._calendar_str = self._calendar.serialize()
         return self._calendar_str
