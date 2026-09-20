@@ -1,7 +1,7 @@
 import httpx
 import parse_timetable
 from types import FunctionType
-from copy import copy
+from functools import wraps
 from exceptions import *
 import models
 from discover_next_action_token import discover_action_id
@@ -52,22 +52,28 @@ class AuthSession:
                 return
         raise LoginError("Authentication completed but no session cookie was issued.")
 
-    def login_required(func, tries=2):
-        async def inner(self: "AuthSession", *args, **kwargs):
-            if self.client.cookies.get("ses") is None:
-                await self.login()
-            maybe_exception = Exception()
-            for i in range(tries):
-                try:
-                    return await func(self, *args, **kwargs)
-                except Exception as e:
-                    maybe_exception = copy(e)
-                    logger.warning(f"Failed running {func.__name__} for user {self.username}: {e}. "
-                                   f"{'Retrying login.' if i + 1 < tries else 'Not retrying anymore.'}")
+    def login_required(func=None, *, tries=2):
+        def decorator(func):
+            @wraps(func)
+            async def inner(self: "AuthSession", *args, **kwargs):
+                if self.client.cookies.get("ses") is None:
                     await self.login()
-            raise maybe_exception
+                for attempt in range(1, tries + 1):
+                    try:
+                        return await func(self, *args, **kwargs)
+                    except httpx.HTTPError as e:
+                        last = attempt == tries
+                        logger.warning(
+                            f"Failed running {func.__name__} for user {self.username}: {e}. "
+                            f"{'Not retrying anymore.' if last else 'Retrying login.'}"
+                        )
+                        if last:
+                            raise
+                        await self.login()
 
-        return inner
+            return inner
+
+        return decorator if func is None else decorator(func)
 
     async def reset_next_action_token(self):
         logger.info("Resetting the next-action token!")
