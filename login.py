@@ -28,6 +28,7 @@ class AuthSession:
         return self.client.cookies.get("ses") is not None
 
     async def login(self):
+        self.client.cookies.clear()
         r = await self.client.post(
             "https://www.easistent.com/p/ajax_prijava",
             files={
